@@ -1,64 +1,61 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"mymessage/entities"
-	mymessage "mymessage/my_message"
+	"rapper/api"
 	"time"
 )
 
 func main() {
 
-	kafkaURL := "localhost:9092"
+	amq := "amqp://guest:guest@localhost:5672/"
 
-	publisher := mymessage.MyMessageKafkaPublisher(context.Background(), "tcp", kafkaURL)
-
-	myConsumer := mymessage.MyMessageKafkaConsumerService([]string{kafkaURL}, "group1")
-
-	myConsumer.AddHandler(
-		mymessage.NewMessageHandler("abc", HelloCQRSCommand),
-	)
-
-	myConsumer.AddHandler(
-		mymessage.NewMessageHandler("yimz", Yim2),
-	)
+	pub := api.NewRabitMQPublisherService(amq)
 
 	go func() {
 		i := 1
-		for i < 5 {
-			time.Sleep(1 * time.Second)
+		for i < 10 {
+			pub.Publish(EIEI{
+				A: fmt.Sprintf("yim%d", i),
+				B: fmt.Sprintf("eieizzz%d", i),
+			})
+
+			pub.Publish(Yimmy{
+				Tim: i,
+			})
+			// Simulate some processing time
 			i++
-			publisher.Publish(TheYImZ{
-				YIM: "eiei YIM",
-			})
-			publisher.Publish(entities.MyTopic1{
-				Yippe1: "YIPPY ",
-				Eiei:   i,
-			})
+			time.Sleep(1 * time.Second)
+			fmt.Println("Pub")
 		}
 	}()
+
+	sub := api.NewRabitMQSubscriberService(amq)
+
+	sub.Subscribe(
+		api.AddHandler(YEAH),
+		api.AddHandler(TIMME2),
+	)
 
 	select {}
 
 }
 
-type TheYImZ struct {
-	YIM string
+type EIEI struct {
+	A string
+	B string
 }
 
-func Yim2(c TheYImZ) error {
-	fmt.Println(c.YIM)
+type Yimmy struct {
+	Tim int
+}
+
+func YEAH(msg EIEI) error {
+	fmt.Println(msg)
 	return nil
 }
 
-func HelloCQRSCommand(command entities.MyTopic1) error {
-
-	fmt.Println("HelloCQRSCommand")
-
-	fmt.Println(command.Yippe1)
-	fmt.Println(command.Eiei)
-
+func TIMME2(msg Yimmy) error {
+	fmt.Println(msg)
 	return nil
-
 }
