@@ -3,58 +3,81 @@ package mymessage
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"mymessage/utils"
-	"time"
 
 	"github.com/segmentio/kafka-go"
 )
 
 type MyMessageKafkaPublisherService struct {
-	writer *kafka.Writer
-	ctx    context.Context
+	ctx     context.Context
+	network string
+	address string
 }
 
 func MyMessageKafkaPublisher(ctx context.Context, network string, address string) *MyMessageKafkaPublisherService {
-
 	return &MyMessageKafkaPublisherService{
-		ctx: ctx,
-		writer: &kafka.Writer{
-			Addr:         kafka.TCP(address),
-			Balancer:     &kafka.LeastBytes{},
-			BatchSize:    100,                   // Batch up to 100 messages
-			BatchBytes:   1048576,               // 1MB per batch
-			BatchTimeout: 10 * time.Millisecond, // Wait up to 10ms for batch to fill
-			Async:        true,                  // Non-blocking async writes
-		},
+		ctx:     ctx,
+		network: network,
+		address: address,
 	}
 }
+
 func (p *MyMessageKafkaPublisherService) Publish(msg any) {
 	topic := utils.GetStructName(msg)
-	fmt.Println("pub topic ", topic)
+	partition := 10
 
-	jsonMsg, err := json.Marshal(msg)
+	conn, err := kafka.DialLeader(context.Background(), p.network, p.address, topic, partition)
 	if err != nil {
-		fmt.Printf("Error marshaling message: %v\n", err)
-		return
+		panic(err)
+	}
+	defer conn.Close()
+
+	byteMsg, err := json.Marshal(msg)
+	if err != nil {
+		panic(err)
+	}
+	_, err = conn.WriteMessages(
+		kafka.Message{Value: byteMsg},
+	)
+
+	if err != nil {
+		panic(err)
 	}
 
-	// Use a goroutine to prevent blocking
-	go func() {
-		err := p.writer.WriteMessages(p.ctx, kafka.Message{
-			Topic: topic,
-			Value: jsonMsg,
-		})
-		if err != nil {
-			fmt.Printf("Error writing message: %v\n", err)
-		}
-	}()
 }
 
-// Close should be called when the publisher is no longer needed
-func (p *MyMessageKafkaPublisherService) Close() error {
-	if p.writer != nil {
-		return p.writer.Close()
-	}
-	return nil
-}
+// func LoopPub() {
+// 	fmt.Println("Start Loop pub")
+// 	topic := "MyTopic1"
+// 	partition := 0
+
+// 	conn, err := kafka.DialLeader(context.Background(), "tcp", "localhost:9092", topic, partition)
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	// defer conn.Close()
+
+// 	for i := 0; i < 100; i++ {
+
+// 		mes := entities.MyTopic1{
+// 			Yippe1: "Yippe1",
+// 			Eiei:   1,
+// 		}
+
+// 		byteMsg, err := json.Marshal(mes)
+// 		if err != nil {
+// 			panic(err)
+// 		}
+// 		_, err = conn.WriteMessages(
+// 			kafka.Message{Value: byteMsg},
+// 		)
+
+// 		fmt.Println("pub ", i)
+
+// 		if err != nil {
+// 			panic(err)
+// 		}
+
+// 		time.Sleep(1 * time.Second)
+// 	}
+// }
